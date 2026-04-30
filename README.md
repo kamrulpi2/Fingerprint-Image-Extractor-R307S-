@@ -100,3 +100,8 @@ MIT License
 Kamrul (BUBT AgroDoctor Team 🚀)
 
 https://www.alldatasheet.com/datasheet-pdf/pdf/1756584/GROW/R307.html
+<img width="891" height="511" alt="image" src="https://github.com/user-attachments/assets/2bd97623-1dab-4d75-b183-c820452fb786" />
+<img width="332" height="392" alt="image" src="https://github.com/user-attachments/assets/bd4ce0aa-c3a2-460c-b79d-3b670a611307" />
+
+
+
