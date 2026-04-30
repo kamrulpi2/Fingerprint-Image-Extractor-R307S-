@@ -1,0 +1,97 @@
+import serial
+import binascii
+import os
+from pathlib import Path
+from PIL import Image
+
+# --- CONFIGURATION ---
+PORT = 'COM24'  # <-- Change this to your ESP32's COM port
+BAUD = 115200
+WIDTH = 256
+HEIGHT = 288
+
+# --- AUTOMATIC DOWNLOADS PATH ---
+# This automatically finds your C:\Users\YourName\Downloads folder
+DOWNLOADS_DIR = str(Path.home() / "Downloads")
+FILENAME = os.path.join(DOWNLOADS_DIR, "fingerprint_scan.png")
+
+def extract_image_from_packets(raw_bytes):
+    """
+    Decodes the R307 data packets and extracts the pixel data.
+    """
+    image_data = bytearray()
+    idx = 0
+    
+    while idx < len(raw_bytes) - 9:
+        # Look for the sensor's packet header: EF 01 FF FF FF FF
+        if raw_bytes[idx:idx+6] == b'\xef\x01\xff\xff\xff\xff':
+            pid = raw_bytes[idx+6]
+            
+            # 0x02 = Data Packet, 0x08 = End Data Packet
+            if pid in (0x02, 0x08):
+                length = (raw_bytes[idx+7] << 8) | raw_bytes[idx+8]
+                payload_len = length - 2 # Subtract the 2-byte checksum
+                
+                if idx + 9 + payload_len <= len(raw_bytes):
+                    payload = raw_bytes[idx+9 : idx+9+payload_len]
+                    
+                    # Expand 4-bit pixels into 8-bit pixels for the PNG
+                    for b in payload:
+                        image_data.append((b >> 4) * 17)   # Upper 4 bits
+                        image_data.append((b & 0x0F) * 17) # Lower 4 bits
+                        
+                idx += 9 + length # Jump to next packet
+            else:
+                idx += 1
+        else:
+            idx += 1
+            
+    # Verify and save the image
+    expected_pixels = WIDTH * HEIGHT
+    if len(image_data) >= expected_pixels:
+        img = Image.frombytes('L', (WIDTH, HEIGHT), bytes(image_data[:expected_pixels]))
+        
+        # Save to the Downloads folder
+        img.save(FILENAME)
+        print(f"✅ Success! Image saved to: {FILENAME}")
+        img.show()
+    else:
+        print(f"❌ Error: Not enough data. Got {len(image_data)} pixels, expected {expected_pixels}.")
+
+def main():
+    try:
+        ser = serial.Serial(PORT, BAUD, timeout=1)
+        print(f"Listening on {PORT}... Place your finger on the sensor.")
+        
+        hex_data = ""
+        receiving = False
+        
+        while True:
+            line = ser.readline().decode('utf-8', errors='ignore').strip()
+            
+            if line == "IMAGE_START":
+                print("Downloading data from ESP32... Keep finger still.")
+                receiving = True
+                hex_data = ""
+            elif line == "IMAGE_END":
+                print("Download complete. Processing PNG...")
+                receiving = False
+                
+                # Convert the massive HEX string back into raw bytes
+                raw_bytes = binascii.unhexlify(hex_data)
+                extract_image_from_packets(raw_bytes)
+                break
+                
+            elif receiving and line:
+                hex_data += line
+
+    except serial.SerialException:
+        print(f"❌ Could not open {PORT}. Ensure the Arduino Serial Monitor is CLOSED.")
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    finally:
+        if 'ser' in locals() and ser.is_open:
+            ser.close()
+
+if __name__ == '__main__':
+    main()
