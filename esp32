@@ -1,1 +1,62 @@
 
+#include <Adafruit_Fingerprint.h>
+
+// Use HardwareSerial 2 for ESP32
+HardwareSerial mySerial(2); // RX2 = 16, TX2 = 17
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
+
+void setup() {
+  Serial.begin(115200); // Speed for PC
+  finger.begin(57600);  // Speed for Sensor
+  
+  if (finger.verifyPassword()) {
+    Serial.println("Sensor Found! Ready.");
+  } else {
+    Serial.println("Sensor not found. Check wiring.");
+    while (1) { delay(1); }
+  }
+}
+
+void loop() {
+  Serial.println("\n--- PLACE FINGER ON SENSOR ---");
+  
+  // Wait until a finger is scanned
+  while (finger.getImage() != FINGERPRINT_OK) {
+    delay(100);
+  }
+  Serial.println("Scan successful! Downloading image...");
+
+  // Send the "UpImage" (0x0A) command directly to the sensor
+  // This tells the R307 to send the raw image buffer to the ESP32
+  uint8_t upImageCmd[] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x03, 0x0A, 0x00, 0x0E};
+  mySerial.write(upImageCmd, 12);
+
+  // Tell Python to start recording
+  Serial.println("IMAGE_START");
+  
+  uint32_t timeout = millis();
+  int byteCount = 0;
+  
+  // Read incoming packets from the sensor and forward to PC as HEX
+  while (millis() - timeout < 2000) { // Stop if no data for 2 seconds
+    if (mySerial.available()) {
+      uint8_t b = mySerial.read();
+      
+      // Print as 2-character Hex
+      if (b < 0x10) Serial.print("0");
+      Serial.print(b, HEX);
+      
+      byteCount++;
+      // Print a newline every 64 bytes to prevent serial buffer overflow
+      if (byteCount % 64 == 0) {
+        Serial.println();
+      }
+      
+      timeout = millis(); // Reset timeout since we received data
+    }
+  }
+  
+  Serial.println();
+  Serial.println("IMAGE_END"); // Tell Python we are done
+  delay(3000); // Wait before allowing the next scan
+}
