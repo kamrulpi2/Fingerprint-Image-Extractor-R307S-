@@ -98,3 +98,5 @@ MIT License
 ## 👨‍💻 Author
 
 Kamrul (BUBT AgroDoctor Team 🚀)
+
+https://www.alldatasheet.com/datasheet-pdf/pdf/1756584/GROW/R307.html
